@@ -40,7 +40,15 @@ func newProxy(u *url.URL) *httputil.ReverseProxy {
 		req.URL.Scheme = u.Scheme
 		req.URL.Host = u.Host
 	}
+
+	modifyResponse := func(resp *http.Response) error {
+		// resp.Header.Add("Proxy-Connection", "Close")
+		// resp.Header.Add("Connection", "Close")
+		return nil
+	}
+
 	return &httputil.ReverseProxy{
-		Director: director,
+		Director:       director,
+		ModifyResponse: modifyResponse,
 	}
 }
