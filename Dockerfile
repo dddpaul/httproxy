@@ -1,8 +1,12 @@
-FROM alpine:3.3
-MAINTAINER Pavel Derendyaev <dddpaul@gmail.com>
+FROM golang:1.8.3 as builder
+WORKDIR /go/src/github.com/dddpaul/httproxy
+ADD . ./
+RUN make build-alpine
 
-ADD root /
-
-ENTRYPOINT ["/bin/httproxy"]
-CMD ["-port", ":8080"]
+FROM alpine:latest
+WORKDIR /app
+COPY --from=builder /go/src/github.com/dddpaul/httproxy/bin/httproxy .
 EXPOSE 8080
+
+ENTRYPOINT ["./httproxy"]
+CMD ["-port", ":8080"]

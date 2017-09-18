@@ -1,14 +1,14 @@
 .PHONY: all build release
 
 IMAGE=dddpaul/httproxy
-VERSION=$(shell cat VERSION)
+VERSION=2.0
 
 all: build
 
+build-alpine:
+	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ./bin/httproxy ./main.go
+
 build:
-	@go test
-	@mkdir -p root/bin
-	@CGO_ENABLED=0 go build -o root/bin/httproxy
 	@docker build --tag=${IMAGE} .
 
 debug:
