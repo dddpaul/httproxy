@@ -36,11 +36,13 @@ func (flags *arrayFlags) toURLs() []*url.URL {
 var verbose bool
 var port string
 var urls arrayFlags
+var followRedirects bool
 
 func main() {
 	flag.BoolVar(&verbose, "verbose", false, "Print request details")
 	flag.StringVar(&port, "port", ":8080", "Port to listen (prepended by colon), i.e. :8080")
 	flag.Var(&urls, "url", "List of URL to proxy to, i.e. http://localhost:8081")
+	flag.BoolVar(&followRedirects, "follow", false, "Follow 3xx redirects internally")
 	flag.Parse()
 
 	if len(urls) == 0 {
@@ -58,13 +60,20 @@ func newProxy(urls []*url.URL) *httputil.ReverseProxy {
 		req.URL.Scheme = u.Scheme
 		req.URL.Host = u.Host
 		req.URL.Path = singleJoiningSlash(u.Path, req.URL.Path)
+		req.Host = u.Host
+		// fmt.Printf("Request = %+v\n", req)
 		if verbose {
 			log.Printf("%s %s from [%s] passed to %v\n", req.Method, req.RequestURI, req.RemoteAddr, req.URL)
 		}
 	}
 
+	modifier := func(resp *http.Response) error {
+		return nil
+	}
+
 	return &httputil.ReverseProxy{
-		Director: director,
+		Director:       director,
+		ModifyResponse: modifier,
 	}
 }
 
