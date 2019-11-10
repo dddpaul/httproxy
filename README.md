@@ -21,8 +21,8 @@ Usage:
 httproxy [OPTIONS]
   -port string
     	Port to listen (prepended by colon), i.e. :8080 (default ":8080")
-  -url string
-    	URL to proxy to, i.e. http://localhost:8081
+  -url value
+    	List of URL to proxy to, i.e. http://localhost:8081
   -verbose
     	Print request details
 ```
