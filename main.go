@@ -49,7 +49,7 @@ func main() {
 		panic("At least on URL has to be specified")
 	}
 
-	log.Printf("Proxy server is listening on port %s, upstreams = %s, verbose = %v\n", port, urls, verbose)
+	log.Printf("Proxy server is listening on port %s, upstreams = %s, followRedirects = %v, verbose = %v\n", port, urls, followRedirects, verbose)
 	proxy := newProxy(urls.toURLs())
 	http.ListenAndServe(port, proxy)
 }
@@ -68,6 +68,28 @@ func newProxy(urls []*url.URL) *httputil.ReverseProxy {
 	}
 
 	modifier := func(resp *http.Response) error {
+		if !followRedirects {
+			return nil
+		}
+		// fmt.Printf("Response = %+v\n", resp)
+
+		u, err := resp.Location()
+		if err != nil {
+			switch err {
+			case http.ErrNoLocation:
+				return nil
+			default:
+				return err
+			}
+		}
+
+		r, err := http.Get(u.String())
+		if err != nil {
+			return err
+		}
+		// fmt.Printf("Followed response = %+v\n", r)
+
+		cloneResponse(resp, r)
 		return nil
 	}
 
@@ -79,6 +101,24 @@ func newProxy(urls []*url.URL) *httputil.ReverseProxy {
 
 func loadBalance(targets []*url.URL) *url.URL {
 	return targets[rand.Int()%len(targets)]
+}
+
+func cloneResponse(to, from *http.Response) {
+	to.Status = from.Status
+	to.StatusCode = from.StatusCode
+	to.Body = from.Body
+	to.ContentLength = from.ContentLength
+	if from.Header.Get("Content-Encoding") != "" {
+		to.Header.Set("Content-Encoding", from.Header.Get("Content-Encoding"))
+	} else {
+		to.Header.Del("Content-Encoding")
+	}
+	if from.Header.Get("Content-Type") != "" {
+		to.Header.Set("Content-Type", from.Header.Get("Content-Type"))
+	} else {
+		to.Header.Del("Content-Type")
+	}
+	to.Header.Del("Location")
 }
 
 // Taken from net/http/httputil/reverseproxy.go
