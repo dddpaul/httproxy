@@ -1,4 +1,4 @@
-FROM golang:1.8.3 as builder
+FROM golang:1.13.4 as builder
 WORKDIR /go/src/github.com/dddpaul/httproxy
 ADD . ./
 RUN make build-alpine
