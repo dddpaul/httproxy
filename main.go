@@ -108,17 +108,18 @@ func cloneResponse(to, from *http.Response) {
 	to.StatusCode = from.StatusCode
 	to.Body = from.Body
 	to.ContentLength = from.ContentLength
-	if from.Header.Get("Content-Encoding") != "" {
-		to.Header.Set("Content-Encoding", from.Header.Get("Content-Encoding"))
-	} else {
-		to.Header.Del("Content-Encoding")
+	headers := []string{"Content-Length", "Content-Encoding", "Content-Type"}
+	for _, h := range headers {
+		replaceHeader(to, from, h)
 	}
-	if from.Header.Get("Content-Type") != "" {
-		to.Header.Set("Content-Type", from.Header.Get("Content-Type"))
+}
+
+func replaceHeader(to, from *http.Response, header string) {
+	if from.Header.Get(header) != "" {
+		to.Header.Set(header, from.Header.Get(header))
 	} else {
-		to.Header.Del("Content-Type")
+		to.Header.Del(header)
 	}
-	to.Header.Del("Location")
 }
 
 // Taken from net/http/httputil/reverseproxy.go
