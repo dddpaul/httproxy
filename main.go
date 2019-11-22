@@ -8,6 +8,8 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+
+	"github.com/unrolled/logger"
 )
 
 type arrayFlags []string
@@ -49,29 +51,32 @@ func main() {
 		panic("At least on URL has to be specified")
 	}
 
-	log.Printf("Proxy server is listening on port %s, upstreams = %s, followRedirects = %v, verbose = %v\n", port, urls, followRedirects, verbose)
 	proxy := newProxy(urls.toURLs())
+	if verbose {
+		proxy = logger.New(logger.Options{
+			Prefix:               "httproxy",
+			RemoteAddressHeaders: []string{"X-Forwarded-For"},
+			OutputFlags:          log.LstdFlags,
+		}).Handler(proxy)
+	}
+
+	log.Printf("Proxy server is listening on port %s, upstreams = %s, followRedirects = %v, verbose = %v\n", port, urls, followRedirects, verbose)
 	http.ListenAndServe(port, proxy)
 }
 
-func newProxy(urls []*url.URL) *httputil.ReverseProxy {
+func newProxy(urls []*url.URL) http.Handler {
 	director := func(req *http.Request) {
 		u := loadBalance(urls)
 		req.URL.Scheme = u.Scheme
 		req.URL.Host = u.Host
 		req.URL.Path = singleJoiningSlash(u.Path, req.URL.Path)
 		req.Host = u.Host
-		// fmt.Printf("Request = %+v\n", req)
-		if verbose {
-			log.Printf("%s %s from [%s] passed to %v\n", req.Method, req.RequestURI, req.RemoteAddr, req.URL)
-		}
 	}
 
 	modifier := func(resp *http.Response) error {
 		if !followRedirects {
 			return nil
 		}
-		// fmt.Printf("Response = %+v\n", resp)
 
 		u, err := resp.Location()
 		if err != nil {
@@ -87,7 +92,6 @@ func newProxy(urls []*url.URL) *httputil.ReverseProxy {
 		if err != nil {
 			return err
 		}
-		// fmt.Printf("Followed response = %+v\n", r)
 
 		cloneResponse(resp, r)
 		return nil
