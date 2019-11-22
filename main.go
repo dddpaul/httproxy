@@ -112,6 +112,7 @@ func cloneResponse(to, from *http.Response) {
 	for _, h := range headers {
 		replaceHeader(to, from, h)
 	}
+	to.Header.Del("Location")
 }
 
 func replaceHeader(to, from *http.Response, header string) {
