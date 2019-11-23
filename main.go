@@ -47,7 +47,7 @@ func main() {
 	flag.StringVar(&port, "port", ":8080", "Port to listen (prepended by colon), i.e. :8080")
 	flag.Var(&urls, "url", "List of URL to proxy to, i.e. http://localhost:8081")
 	flag.BoolVar(&followRedirects, "follow", false, "Follow 3xx redirects internally")
-	flag.Int64Var(&timeout, "timeout", 0, "Proxy request timeout (ms)")
+	flag.Int64Var(&timeout, "timeout", 0, "Proxy request timeout (ms), 0 means no timeout")
 	flag.Parse()
 
 	if len(urls) == 0 {
@@ -63,7 +63,8 @@ func main() {
 		}).Handler(proxy)
 	}
 
-	log.Printf("Proxy server is listening on port %s, upstreams = %s, followRedirects = %v, verbose = %v\n", port, urls, followRedirects, verbose)
+	log.Printf("Proxy server is listening on port %s, upstreams = %s, timeout = %v ms, followRedirects = %v, verbose = %v\n",
+		port, urls, timeout, followRedirects, verbose)
 	http.ListenAndServe(port, proxy)
 }
 
