@@ -1,15 +1,16 @@
 package main
 
 import (
+	"context"
 	"flag"
+	"github.com/unrolled/logger"
 	"log"
 	"math/rand"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
-
-	"github.com/unrolled/logger"
+	"time"
 )
 
 type arrayFlags []string
@@ -39,12 +40,14 @@ var verbose bool
 var port string
 var urls arrayFlags
 var followRedirects bool
+var timeout int64
 
 func main() {
 	flag.BoolVar(&verbose, "verbose", false, "Print request details")
 	flag.StringVar(&port, "port", ":8080", "Port to listen (prepended by colon), i.e. :8080")
 	flag.Var(&urls, "url", "List of URL to proxy to, i.e. http://localhost:8081")
 	flag.BoolVar(&followRedirects, "follow", false, "Follow 3xx redirects internally")
+	flag.Int64Var(&timeout, "timeout", 0, "Proxy request timeout (ms)")
 	flag.Parse()
 
 	if len(urls) == 0 {
@@ -71,6 +74,13 @@ func newProxy(urls []*url.URL) http.Handler {
 		req.URL.Host = u.Host
 		req.URL.Path = singleJoiningSlash(u.Path, req.URL.Path)
 		req.Host = u.Host
+
+		if timeout > 0 {
+			ctx := req.Context()
+			ctx, _ = context.WithTimeout(ctx, time.Duration(timeout) * time.Millisecond)
+			req2 := req.WithContext(ctx)
+			*req = *req2
+		}
 	}
 
 	modifier := func(resp *http.Response) error {
