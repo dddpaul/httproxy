@@ -65,7 +65,7 @@ func main() {
 
 	log.Printf("Proxy server is listening on port %s, upstreams = %s, timeout = %v ms, followRedirects = %v, verbose = %v\n",
 		port, urls, timeout, followRedirects, verbose)
-	http.ListenAndServe(port, proxy)
+	log.Fatalln("ListenAndServe:", http.ListenAndServe(port, proxy))
 }
 
 func newProxy(urls []*url.URL) http.Handler {
