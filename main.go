@@ -82,8 +82,7 @@ func newProxy(urls []*url.URL) http.Handler {
 		req.Host = u.Host
 
 		if timeout > 0 {
-			ctx := req.Context()
-			ctx, _ = context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
+			ctx, _ := context.WithTimeout(req.Context(), time.Duration(timeout)*time.Millisecond)
 			req2 := req.WithContext(ctx)
 			*req = *req2
 		}
