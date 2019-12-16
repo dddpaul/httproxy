@@ -25,6 +25,8 @@ httproxy [OPTIONS]
         List of URL to proxy to, i.e. http://localhost:8081
   -timeout int
         Proxy request timeout (ms), 0 means no timeout
+  -error-response-code int
+    	Override HTTP response code on proxy error (default 502)
   -follow
         Follow 3xx redirects internally
   -verbose
