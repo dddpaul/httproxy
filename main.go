@@ -42,6 +42,7 @@ var port string
 var urls arrayFlags
 var followRedirects bool
 var timeout int64
+var errorResponseCode int
 var l *logger.Logger
 
 func main() {
@@ -51,6 +52,7 @@ func main() {
 	flag.Var(&urls, "url", "List of URL to proxy to, i.e. http://localhost:8081")
 	flag.BoolVar(&followRedirects, "follow", false, "Follow 3xx redirects internally")
 	flag.Int64Var(&timeout, "timeout", 0, "Proxy request timeout (ms), 0 means no timeout")
+	flag.IntVar(&errorResponseCode, "error-response-code", http.StatusBadGateway, "Override HTTP response code on proxy error")
 	flag.Parse()
 
 	if len(urls) == 0 {
@@ -68,8 +70,8 @@ func main() {
 		proxy = l.Handler(proxy)
 	}
 
-	l.Printf("Proxy server is listening on port %s, upstreams = %s, timeout = %v ms, followRedirects = %v, verbose = %v\n",
-		port, urls, timeout, followRedirects, verbose)
+	l.Printf("Proxy server is listening on port %s, upstreams = %s, timeout = %v ms, errorResponseCode = %v, followRedirects = %v, verbose = %v\n",
+		port, urls, timeout, errorResponseCode, followRedirects, verbose)
 	l.Fatalln("ListenAndServe:", http.ListenAndServe(port, proxy))
 }
 
@@ -112,9 +114,15 @@ func newProxy(urls []*url.URL) http.Handler {
 		return nil
 	}
 
+	errorHandler := func(rw http.ResponseWriter, req *http.Request, err error) {
+		l.Printf("Proxy error: %v\n", err)
+		rw.WriteHeader(errorResponseCode)
+	}
+
 	return &httputil.ReverseProxy{
 		Director:       director,
 		ModifyResponse: modifier,
+		ErrorHandler:   errorHandler,
 	}
 }
 
