@@ -36,13 +36,16 @@ func (flags *arrayFlags) toURLs() []*url.URL {
 	return urls
 }
 
+var prefix string
 var verbose bool
 var port string
 var urls arrayFlags
 var followRedirects bool
 var timeout int64
+var l *logger.Logger
 
 func main() {
+	flag.StringVar(&prefix, "prefix", "httproxy", "Logging prefix")
 	flag.BoolVar(&verbose, "verbose", false, "Print request details")
 	flag.StringVar(&port, "port", ":8080", "Port to listen (prepended by colon), i.e. :8080")
 	flag.Var(&urls, "url", "List of URL to proxy to, i.e. http://localhost:8081")
@@ -54,18 +57,20 @@ func main() {
 		panic("At least on URL has to be specified")
 	}
 
+	l = logger.New(logger.Options{
+		Prefix:               prefix,
+		RemoteAddressHeaders: []string{"X-Forwarded-For"},
+		OutputFlags:          log.LstdFlags,
+	})
+
 	proxy := newProxy(urls.toURLs())
 	if verbose {
-		proxy = logger.New(logger.Options{
-			Prefix:               "httproxy",
-			RemoteAddressHeaders: []string{"X-Forwarded-For"},
-			OutputFlags:          log.LstdFlags,
-		}).Handler(proxy)
+		proxy = l.Handler(proxy)
 	}
 
-	log.Printf("Proxy server is listening on port %s, upstreams = %s, timeout = %v ms, followRedirects = %v, verbose = %v\n",
+	l.Printf("Proxy server is listening on port %s, upstreams = %s, timeout = %v ms, followRedirects = %v, verbose = %v\n",
 		port, urls, timeout, followRedirects, verbose)
-	log.Fatalln("ListenAndServe:", http.ListenAndServe(port, proxy))
+	l.Fatalln("ListenAndServe:", http.ListenAndServe(port, proxy))
 }
 
 func newProxy(urls []*url.URL) http.Handler {
@@ -78,7 +83,7 @@ func newProxy(urls []*url.URL) http.Handler {
 
 		if timeout > 0 {
 			ctx := req.Context()
-			ctx, _ = context.WithTimeout(ctx, time.Duration(timeout) * time.Millisecond)
+			ctx, _ = context.WithTimeout(ctx, time.Duration(timeout)*time.Millisecond)
 			req2 := req.WithContext(ctx)
 			*req = *req2
 		}
