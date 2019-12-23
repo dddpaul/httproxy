@@ -43,6 +43,7 @@ var urls arrayFlags
 var followRedirects bool
 var timeout int64
 var errorResponseCode int
+var errorResponseBody string
 var l *logger.Logger
 
 func main() {
@@ -53,6 +54,7 @@ func main() {
 	flag.BoolVar(&followRedirects, "follow", false, "Follow 3xx redirects internally")
 	flag.Int64Var(&timeout, "timeout", 0, "Proxy request timeout (ms), 0 means no timeout")
 	flag.IntVar(&errorResponseCode, "error-response-code", http.StatusBadGateway, "Override HTTP response code on proxy error")
+	flag.StringVar(&errorResponseBody, "error-response-body", "", "Body content on proxy error")
 	flag.Parse()
 
 	if len(urls) == 0 {
@@ -117,6 +119,11 @@ func newProxy(urls []*url.URL) http.Handler {
 	errorHandler := func(rw http.ResponseWriter, req *http.Request, err error) {
 		l.Printf("Proxy error: %v\n", err)
 		rw.WriteHeader(errorResponseCode)
+		if len(errorResponseBody) > 0 {
+			if _, err := rw.Write([]byte(errorResponseBody)); err != nil {
+				l.Println(err)
+			}
+		}
 	}
 
 	return &httputil.ReverseProxy{

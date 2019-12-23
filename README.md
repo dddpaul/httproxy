@@ -27,6 +27,8 @@ httproxy [OPTIONS]
         Proxy request timeout (ms), 0 means no timeout
   -error-response-code int
     	Override HTTP response code on proxy error (default 502)
+  -error-response-body string
+    	Body content on proxy error
   -follow
         Follow 3xx redirects internally
   -verbose
