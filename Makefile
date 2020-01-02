@@ -1,7 +1,7 @@
 .PHONY: all build release
 
 IMAGE=dddpaul/httproxy
-VERSION=3.5
+VERSION=3.6
 
 all: build
 
