@@ -10,5 +10,4 @@ WORKDIR /app
 COPY --from=builder /go/src/github.com/dddpaul/httproxy/bin/httproxy .
 EXPOSE 8080
 
-ENTRYPOINT ["./httproxy"]
-CMD ["-port", ":8080"]
+CMD ["./httproxy", "-port", ":8080"]
