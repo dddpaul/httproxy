@@ -1,11 +1,11 @@
 .PHONY: all build release
 
 IMAGE=dddpaul/httproxy
-VERSION=3.7
 
 all: build
 
 build-alpine:
+	CGO_ENABLED=0 GOOS=linux go test
 	CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o ./bin/httproxy ./main.go
 
 build:
@@ -15,8 +15,9 @@ debug:
 	@docker run -it --entrypoint=sh ${IMAGE}
 
 release: build
-	@docker build --tag=${IMAGE}:${VERSION} .
+	@echo "Tag image with version $(version)"
+	@docker tag ${IMAGE} ${IMAGE}:$(version)
 
-deploy: release
+push: release
 	@docker push ${IMAGE}
-	@docker push ${IMAGE}:${VERSION}
+	@docker push ${IMAGE}:$(version)
