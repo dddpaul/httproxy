@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/unrolled/logger"
 	"log"
 	"math/rand"
 	"net/http"
@@ -11,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/unrolled/logger"
 )
 
 type arrayFlags []string
@@ -84,6 +85,11 @@ func newProxy(urls []*url.URL) http.Handler {
 		req.URL.Host = u.Host
 		req.URL.Path = singleJoiningSlash(u.Path, req.URL.Path)
 		req.Host = u.Host
+		if u.User != nil {
+			if pw, ok := u.User.Password(); ok {
+				req.SetBasicAuth(u.User.Username(), pw)
+			}
+		}
 
 		if timeout > 0 {
 			ctx, _ := context.WithTimeout(req.Context(), time.Duration(timeout)*time.Millisecond)
