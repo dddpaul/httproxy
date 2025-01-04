@@ -39,6 +39,7 @@ func (flags *arrayFlags) toURLs() []*url.URL {
 
 var prefix string
 var verbose bool
+var dump bool
 var port string
 var urls arrayFlags
 var followRedirects bool
@@ -50,6 +51,7 @@ var l *logger.Logger
 func main() {
 	flag.StringVar(&prefix, "prefix", "httproxy", "Logging prefix")
 	flag.BoolVar(&verbose, "verbose", false, "Print request details")
+	flag.BoolVar(&dump, "dump", false, "Dump request body")
 	flag.StringVar(&port, "port", ":8080", "Port to listen (prepended by colon), i.e. :8080")
 	flag.Var(&urls, "url", "List of URL to proxy to, i.e. http://localhost:8081")
 	flag.BoolVar(&followRedirects, "follow", false, "Follow 3xx redirects internally")
@@ -69,13 +71,28 @@ func main() {
 	})
 
 	proxy := newProxy(urls.toURLs())
+	if dump {
+		proxy = dumpMiddleware(proxy)
+	}
 	if verbose {
 		proxy = l.Handler(proxy)
 	}
 
-	l.Printf("Proxy server is listening on port %s, upstreams = %s, timeout = %v ms, errorResponseCode = %v, followRedirects = %v, verbose = %v\n",
-		port, urls, timeout, errorResponseCode, followRedirects, verbose)
+	l.Printf("Proxy server is listening on port %s, upstreams = %s, timeout = %v ms, errorResponseCode = %v, followRedirects = %v, verbose = %v, dump = %v\n",
+		port, urls, timeout, errorResponseCode, followRedirects, verbose, dump)
 	l.Fatalln("ListenAndServe:", http.ListenAndServe(port, proxy))
+}
+
+func dumpMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		dump, err := httputil.DumpRequest(r, true)
+		if err != nil {
+			log.Printf("Failed to dump request: %v", err)
+		} else {
+			log.Println(string(dump))
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func newProxy(urls []*url.URL) http.Handler {
