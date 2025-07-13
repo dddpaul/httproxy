@@ -1,14 +1,13 @@
 package main
 
 import (
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/unrolled/logger"
 )
 
 // TestServer represents a test HTTP server with utility methods
@@ -100,7 +99,8 @@ func SetupProxyTest(config ProxyTestConfig) func() {
 	originalFollow := followRedirects
 	originalVerbose := verbose
 	originalDump := dump
-	originalLogger := l
+	originalPrefix := log.Prefix()
+	originalFlags := log.Flags()
 
 	// set test values
 	timeout = config.Timeout
@@ -110,11 +110,9 @@ func SetupProxyTest(config ProxyTestConfig) func() {
 	verbose = config.Verbose
 	dump = config.Dump
 
-	// initialize test logger
-	l = logger.New(logger.Options{
-		Prefix:      "test",
-		OutputFlags: 0,
-	})
+	// configure test logger
+	log.SetPrefix("test: ")
+	log.SetFlags(0)
 
 	// return cleanup function
 	return func() {
@@ -124,7 +122,8 @@ func SetupProxyTest(config ProxyTestConfig) func() {
 		followRedirects = originalFollow
 		verbose = originalVerbose
 		dump = originalDump
-		l = originalLogger
+		log.SetPrefix(originalPrefix)
+		log.SetFlags(originalFlags)
 	}
 }
 

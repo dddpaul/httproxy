@@ -2,14 +2,13 @@ package main
 
 import (
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/unrolled/logger"
 )
 
 // Test Suite for httproxy main.go
@@ -510,9 +509,13 @@ func TestNewProxy(t *testing.T) {
 }
 
 func TestNewProxyWithTimeout(t *testing.T) {
-	// initialize logger to avoid nil pointer
-	originalLogger := l
-	defer func() { l = originalLogger }()
+	// store original log settings
+	originalPrefix := log.Prefix()
+	originalFlags := log.Flags()
+	defer func() {
+		log.SetPrefix(originalPrefix)
+		log.SetFlags(originalFlags)
+	}()
 	initTestLogger()
 
 	// create slow backend server
@@ -556,9 +559,13 @@ func TestNewProxyWithTimeout(t *testing.T) {
 }
 
 func TestNewProxyErrorHandling(t *testing.T) {
-	// initialize logger to avoid nil pointer
-	originalLogger := l
-	defer func() { l = originalLogger }()
+	// store original log settings
+	originalPrefix := log.Prefix()
+	originalFlags := log.Flags()
+	defer func() {
+		log.SetPrefix(originalPrefix)
+		log.SetFlags(originalFlags)
+	}()
 	initTestLogger()
 
 	// create URL that will fail
@@ -741,8 +748,6 @@ func TestNewProxy_PathHandling(t *testing.T) {
 
 // initTestLogger initializes the global logger for tests
 func initTestLogger() {
-	l = logger.New(logger.Options{
-		Prefix:      "test",
-		OutputFlags: 0,
-	})
+	log.SetPrefix("test: ")
+	log.SetFlags(0)
 }

@@ -11,13 +11,43 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"github.com/unrolled/logger"
 )
 
 const (
 	defaultReadHeaderTimeout = 10 * time.Second
 )
+
+var remoteAddressHeaders = []string{"X-Forwarded-For"}
+
+// responseWriter wraps http.ResponseWriter to capture status code
+type responseWriter struct {
+	http.ResponseWriter
+	statusCode int
+	written    bool
+}
+
+func newResponseWriter(w http.ResponseWriter) *responseWriter {
+	return &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+}
+
+func (rw *responseWriter) WriteHeader(code int) {
+	if !rw.written {
+		rw.statusCode = code
+		rw.written = true
+	}
+	rw.ResponseWriter.WriteHeader(code)
+}
+
+func (rw *responseWriter) Write(data []byte) (int, error) {
+	if !rw.written {
+		rw.written = true
+	}
+	n, err := rw.ResponseWriter.Write(data)
+	if err != nil {
+		return n, fmt.Errorf("failed to write response: %w", err)
+	}
+	return n, nil
+}
 
 type arrayFlags []string
 
@@ -52,7 +82,6 @@ var (
 	timeout           int64
 	errorResponseCode int
 	errorResponseBody string
-	l                 *logger.Logger
 )
 
 func main() {
@@ -71,28 +100,69 @@ func main() {
 		panic("At least on URL has to be specified")
 	}
 
-	l = logger.New(logger.Options{
-		Prefix:               prefix,
-		RemoteAddressHeaders: []string{"X-Forwarded-For"},
-		OutputFlags:          log.LstdFlags,
-	})
+	// configure standard logger
+	log.SetPrefix(prefix + ": ")
+	log.SetFlags(log.LstdFlags)
 
 	proxy := newProxy(urls.toURLs())
 	if dump {
 		proxy = dumpMiddleware(proxy)
 	}
 	if verbose {
-		proxy = l.Handler(proxy)
+		proxy = loggingMiddleware(proxy)
 	}
 
-	l.Printf("Proxy server is listening on port %s, upstreams = %s, timeout = %v ms, errorResponseCode = %v, followRedirects = %v, verbose = %v, dump = %v\n",
+	log.Printf("Proxy server is listening on port %s, upstreams = %s, timeout = %v ms, errorResponseCode = %v, followRedirects = %v, verbose = %v, dump = %v\n",
 		port, urls, timeout, errorResponseCode, followRedirects, verbose, dump)
 	server := &http.Server{
 		Addr:              port,
 		Handler:           proxy,
 		ReadHeaderTimeout: defaultReadHeaderTimeout,
 	}
-	l.Fatalln("ListenAndServe:", server.ListenAndServe())
+	log.Fatalln("ListenAndServe:", server.ListenAndServe())
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+
+		// extract remote address
+		remoteAddr := getRemoteAddress(r)
+
+		// wrap response writer to capture status code
+		rw := newResponseWriter(w)
+
+		// serve the request
+		next.ServeHTTP(rw, r)
+
+		// log the request
+		duration := time.Since(start)
+		log.Printf("%s %s %s %d %v", r.Method, r.URL.Path, remoteAddr, rw.statusCode, duration)
+	})
+}
+
+func getRemoteAddress(r *http.Request) string {
+	// check for forwarded headers first
+	for _, header := range remoteAddressHeaders {
+		if addr := r.Header.Get(header); addr != "" {
+			// take the first IP if there are multiple
+			if idx := strings.Index(addr, ","); idx != -1 {
+				return strings.TrimSpace(addr[:idx])
+			}
+			return strings.TrimSpace(addr)
+		}
+	}
+
+	// fallback to remote address
+	if addr := r.RemoteAddr; addr != "" {
+		// remove port if present
+		if idx := strings.LastIndex(addr, ":"); idx != -1 {
+			return addr[:idx]
+		}
+		return addr
+	}
+
+	return "unknown"
 }
 
 func dumpMiddleware(next http.Handler) http.Handler {
@@ -153,11 +223,11 @@ func newProxy(urls []*url.URL) http.Handler {
 	}
 
 	errorHandler := func(rw http.ResponseWriter, _ *http.Request, err error) {
-		l.Printf("Proxy error: %v\n", err)
+		log.Printf("Proxy error: %v\n", err)
 		rw.WriteHeader(errorResponseCode)
 		if errorResponseBody != "" {
 			if _, err := rw.Write([]byte(errorResponseBody)); err != nil {
-				l.Println(err)
+				log.Println(err)
 			}
 		}
 	}
