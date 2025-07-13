@@ -37,16 +37,18 @@ func (flags *arrayFlags) toURLs() []*url.URL {
 	return urls
 }
 
-var prefix string
-var verbose bool
-var dump bool
-var port string
-var urls arrayFlags
-var followRedirects bool
-var timeout int64
-var errorResponseCode int
-var errorResponseBody string
-var l *logger.Logger
+var (
+	prefix            string
+	verbose           bool
+	dump              bool
+	port              string
+	urls              arrayFlags
+	followRedirects   bool
+	timeout           int64
+	errorResponseCode int
+	errorResponseBody string
+	l                 *logger.Logger
+)
 
 func main() {
 	flag.StringVar(&prefix, "prefix", "httproxy", "Logging prefix")
