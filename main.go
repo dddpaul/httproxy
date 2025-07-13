@@ -17,9 +17,6 @@ import (
 
 const (
 	defaultReadHeaderTimeout = 10 * time.Second
-	defaultReadTimeout       = 30 * time.Second
-	defaultWriteTimeout      = 30 * time.Second
-	defaultIdleTimeout       = 60 * time.Second
 )
 
 type arrayFlags []string
@@ -94,9 +91,6 @@ func main() {
 		Addr:              port,
 		Handler:           proxy,
 		ReadHeaderTimeout: defaultReadHeaderTimeout,
-		ReadTimeout:       defaultReadTimeout,
-		WriteTimeout:      defaultWriteTimeout,
-		IdleTimeout:       defaultIdleTimeout,
 	}
 	l.Fatalln("ListenAndServe:", server.ListenAndServe())
 }
