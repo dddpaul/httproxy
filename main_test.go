@@ -622,7 +622,7 @@ func TestNewProxyWithRedirectFollowing(t *testing.T) {
 		defer func() { followRedirects = originalFollow }()
 
 		proxy := newProxy([]*url.URL{u})
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rr := httptest.NewRecorder()
 
 		proxy.ServeHTTP(rr, req)
@@ -642,7 +642,7 @@ func TestNewProxyWithRedirectFollowing(t *testing.T) {
 		defer func() { followRedirects = originalFollow }()
 
 		proxy := newProxy([]*url.URL{u})
-		req := httptest.NewRequest("GET", "/test", nil)
+		req := httptest.NewRequest("GET", "/test", http.NoBody)
 		rr := httptest.NewRecorder()
 
 		proxy.ServeHTTP(rr, req)
@@ -724,7 +724,7 @@ func TestNewProxy_PathHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run("path_"+tt.requestPath, func(t *testing.T) {
-			req := httptest.NewRequest("GET", tt.requestPath, nil)
+			req := httptest.NewRequest("GET", tt.requestPath, http.NoBody)
 			rr := httptest.NewRecorder()
 
 			proxy.ServeHTTP(rr, req)

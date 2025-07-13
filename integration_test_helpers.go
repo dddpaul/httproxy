@@ -39,33 +39,33 @@ func NewEchoServer() *TestServer {
 			w.Header().Set("Echo-Auth", auth)
 		}
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("echo response"))
+		_, _ = w.Write([]byte("echo response"))
 	})
 }
 
 // NewSlowServer creates a test server that responds slowly
 func NewSlowServer(delay time.Duration) *TestServer {
-	return NewTestServer(func(w http.ResponseWriter, r *http.Request) {
+	return NewTestServer(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(delay)
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("slow response"))
+		_, _ = w.Write([]byte("slow response"))
 	})
 }
 
 // NewErrorServer creates a test server that always returns an error
 func NewErrorServer(statusCode int, message string) *TestServer {
-	return NewTestServer(func(w http.ResponseWriter, r *http.Request) {
+	return NewTestServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(statusCode)
-		w.Write([]byte(message))
+		_, _ = w.Write([]byte(message))
 	})
 }
 
 // NewRedirectServer creates a test server that redirects to another URL
 func NewRedirectServer(redirectURL string) *TestServer {
-	return NewTestServer(func(w http.ResponseWriter, r *http.Request) {
+	return NewTestServer(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Location", redirectURL)
 		w.WriteHeader(http.StatusFound)
-		w.Write([]byte("redirect response"))
+		_, _ = w.Write([]byte("redirect response"))
 	})
 }
 
@@ -175,7 +175,7 @@ func AssertRequestCount(t *testing.T, server *TestServer, expected int) {
 }
 
 // CreateProxyRequest creates an HTTP request for testing proxy functionality
-func CreateProxyRequest(method, path string, body string) *http.Request {
+func CreateProxyRequest(method, path, body string) *http.Request {
 	if body != "" {
 		bodyReader := strings.NewReader(body)
 		req := httptest.NewRequest(method, path, bodyReader)

@@ -3,8 +3,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -12,6 +13,13 @@ import (
 	"time"
 
 	"github.com/unrolled/logger"
+)
+
+const (
+	defaultReadHeaderTimeout = 10 * time.Second
+	defaultReadTimeout       = 30 * time.Second
+	defaultWriteTimeout      = 30 * time.Second
+	defaultIdleTimeout       = 60 * time.Second
 )
 
 type arrayFlags []string
@@ -26,7 +34,7 @@ func (flags *arrayFlags) Set(value string) error {
 }
 
 func (flags *arrayFlags) toURLs() []*url.URL {
-	var urls []*url.URL
+	urls := make([]*url.URL, 0, len(*flags))
 	for _, s := range *flags {
 		u, err := url.Parse(s)
 		if err != nil {
@@ -82,7 +90,15 @@ func main() {
 
 	l.Printf("Proxy server is listening on port %s, upstreams = %s, timeout = %v ms, errorResponseCode = %v, followRedirects = %v, verbose = %v, dump = %v\n",
 		port, urls, timeout, errorResponseCode, followRedirects, verbose, dump)
-	l.Fatalln("ListenAndServe:", http.ListenAndServe(port, proxy))
+	server := &http.Server{
+		Addr:              port,
+		Handler:           proxy,
+		ReadHeaderTimeout: defaultReadHeaderTimeout,
+		ReadTimeout:       defaultReadTimeout,
+		WriteTimeout:      defaultWriteTimeout,
+		IdleTimeout:       defaultIdleTimeout,
+	}
+	l.Fatalln("ListenAndServe:", server.ListenAndServe())
 }
 
 func dumpMiddleware(next http.Handler) http.Handler {
@@ -111,7 +127,8 @@ func newProxy(urls []*url.URL) http.Handler {
 		}
 
 		if timeout > 0 {
-			ctx, _ := context.WithTimeout(req.Context(), time.Duration(timeout)*time.Millisecond)
+			ctx, cancel := context.WithTimeout(req.Context(), time.Duration(timeout)*time.Millisecond)
+			defer cancel()
 			req2 := req.WithContext(ctx)
 			*req = *req2
 		}
@@ -128,23 +145,23 @@ func newProxy(urls []*url.URL) http.Handler {
 			case http.ErrNoLocation:
 				return nil
 			default:
-				return err
+				return fmt.Errorf("failed to get response location: %w", err)
 			}
 		}
 
 		r, err := http.Get(u.String())
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to follow redirect to %s: %w", u.String(), err)
 		}
 
 		cloneResponse(resp, r)
 		return nil
 	}
 
-	errorHandler := func(rw http.ResponseWriter, req *http.Request, err error) {
+	errorHandler := func(rw http.ResponseWriter, _ *http.Request, err error) {
 		l.Printf("Proxy error: %v\n", err)
 		rw.WriteHeader(errorResponseCode)
-		if len(errorResponseBody) > 0 {
+		if errorResponseBody != "" {
 			if _, err := rw.Write([]byte(errorResponseBody)); err != nil {
 				l.Println(err)
 			}
@@ -159,7 +176,8 @@ func newProxy(urls []*url.URL) http.Handler {
 }
 
 func loadBalance(targets []*url.URL) *url.URL {
-	return targets[rand.Int()%len(targets)]
+	//nolint:gosec // Using weak random is acceptable for load balancing
+	return targets[rand.IntN(len(targets))]
 }
 
 func cloneResponse(to, from *http.Response) {
