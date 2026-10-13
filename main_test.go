@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -40,6 +42,7 @@ import (
 //
 // ### Middleware:
 // - dumpMiddleware() - HTTP request dumping functionality
+// - loggingMiddleware() - streamed responses are flushed through the status-capturing writer
 //
 // ### Reverse Proxy Core:
 // - newProxy() function with comprehensive scenarios:
@@ -555,6 +558,130 @@ func TestNewProxyWithTimeout(t *testing.T) {
 	// should get timeout error (502 status)
 	if rr.Code != http.StatusBadGateway {
 		t.Errorf("newProxy() with timeout status = %v, want %v", rr.Code, http.StatusBadGateway)
+	}
+}
+
+func TestNewProxyWithTimeoutPassesFastResponse(t *testing.T) {
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("fast response"))
+	}))
+	defer backend.Close()
+
+	u, err := url.Parse(backend.URL)
+	if err != nil {
+		t.Fatalf("Failed to parse URL: %v", err)
+	}
+
+	originalTimeout := timeout
+	originalErrorCode := errorResponseCode
+	timeout = 1000
+	errorResponseCode = http.StatusBadGateway
+	defer func() {
+		timeout = originalTimeout
+		errorResponseCode = originalErrorCode
+	}()
+
+	proxy := newProxy([]*url.URL{u})
+	req := httptest.NewRequest("GET", "/test", http.NoBody)
+	rr := httptest.NewRecorder()
+	proxy.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Errorf("newProxy() with timeout status = %v, want %v", rr.Code, http.StatusOK)
+	}
+	if rr.Body.String() != "fast response" {
+		t.Errorf("newProxy() with timeout body = %v, want %v", rr.Body.String(), "fast response")
+	}
+}
+
+func TestResponseWriterFlush(t *testing.T) {
+	rec := httptest.NewRecorder()
+	rw := newResponseWriter(rec)
+
+	if err := http.NewResponseController(rw).Flush(); err != nil {
+		t.Fatalf("ResponseController.Flush() error = %v", err)
+	}
+	if !rec.Flushed {
+		t.Error("responseWriter did not flush the underlying writer")
+	}
+	if rw.Unwrap() != rec {
+		t.Error("responseWriter.Unwrap() did not return the underlying writer")
+	}
+}
+
+type firstLineResult struct {
+	resp   *http.Response
+	reader *bufio.Reader
+	line   string
+	err    error
+}
+
+func TestLoggingMiddlewareFlushesStreamedResponse(t *testing.T) {
+	originalPrefix := log.Prefix()
+	originalFlags := log.Flags()
+	defer func() {
+		log.SetPrefix(originalPrefix)
+		log.SetFlags(originalFlags)
+	}()
+	initTestLogger()
+
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseBackend := func() { releaseOnce.Do(func() { close(release) }) }
+
+	// backend sends one line, then keeps the response open until the test releases it
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/x-ndjson")
+		_, _ = w.Write([]byte("first\n"))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		<-release
+		_, _ = w.Write([]byte("second\n"))
+	}))
+	defer backend.Close()
+
+	u, err := url.Parse(backend.URL)
+	if err != nil {
+		t.Fatalf("Failed to parse URL: %v", err)
+	}
+	front := httptest.NewServer(loggingMiddleware(newProxy([]*url.URL{u})))
+	defer front.Close()
+	defer releaseBackend()
+
+	got := make(chan firstLineResult, 1)
+	go func() {
+		resp, err := http.Get(front.URL)
+		if err != nil {
+			got <- firstLineResult{err: err}
+			return
+		}
+		reader := bufio.NewReader(resp.Body)
+		line, err := reader.ReadString('\n')
+		got <- firstLineResult{resp: resp, reader: reader, line: line, err: err}
+	}()
+
+	var first firstLineResult
+	select {
+	case first = <-got:
+	case <-time.After(2 * time.Second):
+		t.Fatal("first line did not reach the client while the backend kept the response open")
+	}
+	if first.err != nil {
+		t.Fatalf("reading first line: %v", first.err)
+	}
+	defer first.resp.Body.Close()
+	if first.line != "first\n" {
+		t.Errorf("first line = %q, want %q", first.line, "first\n")
+	}
+
+	releaseBackend()
+	rest, err := io.ReadAll(first.reader)
+	if err != nil {
+		t.Fatalf("reading rest: %v", err)
+	}
+	if string(rest) != "second\n" {
+		t.Errorf("rest = %q, want %q", string(rest), "second\n")
 	}
 }
 

@@ -11,6 +11,7 @@ Simple HTTP reverse proxy with load balancing and logging capabilities written i
 - **Error Handling**: Customizable error responses with custom status codes and body content
 - **Redirect Following**: Optional internal following of 3xx redirects
 - **Timeouts**: Configurable request timeouts
+- **Streaming**: Streamed responses (chunked, Server-Sent Events) reach the client as the upstream sends them, also with `-verbose`
 - **Request Dumping**: Full HTTP request dumping for debugging
 
 ## Installation
@@ -35,9 +36,9 @@ httproxy [OPTIONS]
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `-port string` | `:8080` | Port to listen (prepended by colon), i.e. :8080 |
+| `-port string` | `:8080` | Address to listen on, i.e. `:8080` (all interfaces) or `127.0.0.1:8080` (this host only). On all interfaces, anyone who can reach the host gets the upstream credentials embedded in `-url`; use `127.0.0.1:<port>` for a local-only proxy |
 | `-url value` | *required* | List of URL to proxy to, i.e. http://localhost:8081 (can be specified multiple times) |
-| `-timeout int` | `0` | Proxy request timeout (ms), 0 means no timeout |
+| `-timeout int` | `0` | Proxy request timeout (ms) for the whole request, including a streamed response; 0 means no timeout |
 | `-error-response-code int` | `502` | Override HTTP response code on proxy error |
 | `-error-response-body string` | `""` | Body content on proxy error |
 | `-follow` | `false` | Follow 3xx redirects internally |

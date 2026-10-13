@@ -49,6 +49,18 @@ func (rw *responseWriter) Write(data []byte) (int, error) {
 	return n, nil
 }
 
+// Unwrap exposes the underlying writer to http.ResponseController, which the reverse proxy uses to flush streamed responses.
+func (rw *responseWriter) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
+}
+
+// Flush sends buffered data to the client if the underlying writer supports it.
+func (rw *responseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 type arrayFlags []string
 
 func (flags *arrayFlags) String() string {
@@ -88,7 +100,7 @@ func main() {
 	flag.StringVar(&prefix, "prefix", "httproxy", "Logging prefix")
 	flag.BoolVar(&verbose, "verbose", false, "Print request details")
 	flag.BoolVar(&dump, "dump", false, "Dump request body")
-	flag.StringVar(&port, "port", ":8080", "Port to listen (prepended by colon), i.e. :8080")
+	flag.StringVar(&port, "port", ":8080", "Address to listen on, i.e. :8080 (all interfaces) or 127.0.0.1:8080 (this host only)")
 	flag.Var(&urls, "url", "List of URL to proxy to, i.e. http://localhost:8081")
 	flag.BoolVar(&followRedirects, "follow", false, "Follow 3xx redirects internally")
 	flag.Int64Var(&timeout, "timeout", 0, "Proxy request timeout (ms), 0 means no timeout")
@@ -189,13 +201,6 @@ func newProxy(urls []*url.URL) http.Handler {
 				req.SetBasicAuth(u.User.Username(), pw)
 			}
 		}
-
-		if timeout > 0 {
-			ctx, cancel := context.WithTimeout(req.Context(), time.Duration(timeout)*time.Millisecond)
-			defer cancel()
-			req2 := req.WithContext(ctx)
-			*req = *req2
-		}
 	}
 
 	modifier := func(resp *http.Response) error {
@@ -232,11 +237,21 @@ func newProxy(urls []*url.URL) http.Handler {
 		}
 	}
 
-	return &httputil.ReverseProxy{
+	proxy := &httputil.ReverseProxy{
 		Director:       director,
 		ModifyResponse: modifier,
 		ErrorHandler:   errorHandler,
 	}
+	if timeout <= 0 {
+		return proxy
+	}
+
+	// the deadline must outlive the director and cover the whole round trip, so it is set around ServeHTTP
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(timeout)*time.Millisecond)
+		defer cancel()
+		proxy.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func loadBalance(targets []*url.URL) *url.URL {
